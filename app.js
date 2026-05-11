@@ -11,7 +11,7 @@ function updateItemListDOM() {
     itemListDiv.innerHTML = '';
 
     if (itemsToCut.length === 0) {
-        itemListDiv.innerHTML = '<p style="color: #94a3b8; grid-column: 1/-1; text-align: center;">Dodaj elementy, aby zobaczyć je na liście.</p>';
+        itemListDiv.innerHTML = '<p class="empty-msg" style="color: #94a3b8; grid-column: 1/-1; text-align: center; padding: 20px; font-style: italic;">Brak elementów na liście. Dodaj coś powyżej.</p>';
         return;
     }
     
@@ -19,8 +19,8 @@ function updateItemListDOM() {
         const div = document.createElement('div');
         div.className = 'item-badge';
         div.innerHTML = `
-            <span><strong>${group.length} mm</strong> (x${group.quantity})</span>
-            <button class="danger" onclick="removeItemFromItems(${index})">Usuń</button>
+            <span><strong>${group.length} mm</strong> <small>(x${group.quantity})</small></span>
+            <button class="btn-danger-sm" onclick="removeItemFromItems(${index})">Usuń</button>
         `;
         itemListDiv.appendChild(div);
     });
@@ -37,11 +37,13 @@ function addItemToItems() {
     const quantity = parseInt(quantityInput.value);
 
     if (isNaN(length) || length <= 0) {
-        alert("Podaj poprawną długość.");
+        alert("Podaj poprawną długość elementu.");
+        lengthInput.focus();
         return;
     }
     if (isNaN(quantity) || quantity < 1) {
-        alert("Ilość musi być większa od 0.");
+        alert("Ilość musi być liczbą dodatnią.");
+        quantityInput.focus();
         return;
     }
     
@@ -56,6 +58,7 @@ function addItemToItems() {
     updateItemListDOM();
     lengthInput.value = ''; 
     quantityInput.value = '1';
+    lengthInput.focus();
     
     runOptimization();
 }
@@ -74,10 +77,11 @@ function removeItemFromItems(index) {
  */
 function runOptimization() {
     const totalStockLength = parseFloat(document.getElementById('totalLength').value) || 0;
-    const cutThickness = parseFloat(document.getElementById('cutThickness').value) || 0; // Now all in mm
+    const cutThickness = parseFloat(document.getElementById('cutThickness').value) || 0;
 
     if (totalStockLength <= 0) {
         updateStats(0, 0, 0, 0);
+        clearCanvas();
         return;
     }
 
@@ -89,27 +93,34 @@ function runOptimization() {
         }
     });
 
-    // Sort descending
+    // Sort descending for FFD
     flatItems.sort((a, b) => b - a);
 
     // Validate: no single item can be longer than stock
     const tooLong = flatItems.find(len => len > totalStockLength);
     if (tooLong) {
-        showErrorOnCanvas(`Błąd: Element ${tooLong} mm jest dłuższy niż stock (${totalStockLength} mm)`);
+        showErrorOnCanvas(`Błąd: Element ${tooLong}mm przekracza długość materiału (${totalStockLength}mm)`);
         updateStats(totalStockLength, 0, 0, 0);
         return;
     }
 
+    if (flatItems.length === 0) {
+        updateStats(totalStockLength, 0, 0, 0);
+        clearCanvas();
+        return;
+    }
+
     // Bin Packing (First Fit)
-    let bins = []; // Each bin is { remaining: number, items: number[] }
+    let bins = []; 
 
     flatItems.forEach(itemLen => {
         let placed = false;
         for (let bin of bins) {
-            const needed = bin.items.length === 0 ? itemLen : itemLen + cutThickness;
-            if (bin.remaining >= needed) {
+            // Check if item fits including kerf (if not first item in bin)
+            const kerf = bin.items.length > 0 ? cutThickness : 0;
+            if (bin.remaining >= (itemLen + kerf)) {
                 bin.items.push(itemLen);
-                bin.remaining -= needed;
+                bin.remaining -= (itemLen + kerf);
                 placed = true;
                 break;
             }
@@ -123,9 +134,9 @@ function runOptimization() {
     });
 
     const totalWaste = bins.reduce((sum, bin) => sum + bin.remaining, 0);
-    const totalCuts = bins.reduce((sum, bin) => sum + Math.max(0, bin.items.length), 0);
+    const actualCutCount = flatItems.length;
 
-    updateStats(totalStockLength, totalWaste, totalCuts, bins.length);
+    updateStats(totalStockLength, totalWaste, actualCutCount, bins.length);
     drawVisualization(totalStockLength, bins, cutThickness);
 }
 
@@ -135,70 +146,100 @@ function updateStats(stock, waste, cuts, blocks) {
     const cutsEl = document.getElementById('cutCountResult');
     const blocksEl = document.getElementById('blocksUsedResult');
     
-    if (stockEl) stockEl.textContent = stock.toFixed(0);
-    if (wasteEl) wasteEl.textContent = `${waste.toFixed(0)} mm`;
+    if (stockEl) stockEl.textContent = stock.toLocaleString('pl-PL');
+    if (wasteEl) wasteEl.textContent = `${waste.toLocaleString('pl-PL', {maximumFractionDigits: 1})} mm`;
     if (cutsEl) cutsEl.textContent = cuts;
     if (blocksEl) blocksEl.textContent = blocks;
 }
 
-function showErrorOnCanvas(msg) {
+function clearCanvas() {
     const canvas = document.getElementById('visualizationCanvas');
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function showErrorOnCanvas(msg) {
+    const canvas = document.getElementById('visualizationCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    // Scale for high DPI
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = 200 * dpr; // Fixed height for error
+    ctx.scale(dpr, dpr);
+
+    ctx.clearRect(0, 0, rect.width, 200);
     ctx.fillStyle = '#ef4444';
-    ctx.font = 'bold 16px Inter';
+    ctx.font = 'bold 16px Inter, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(msg, canvas.width / 2, 100);
+    ctx.fillText(msg, rect.width / 2, 100);
 }
 
 /**
- * Draws the bins and items on the canvas.
+ * Draws the bins and items on the canvas with proper scaling.
  */
 function drawVisualization(totalStockLength, bins, cutThickness) {
     const canvas = document.getElementById('visualizationCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-
-    const padding = 40;
-    const binHeight = 60;
-    const binGap = 20;
     
-    canvas.width = canvas.parentElement.clientWidth;
-    canvas.height = Math.max(200, (bins.length * (binHeight + binGap)) + (padding * 2));
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // DPI Scaling
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const padding = 20;
+    const binHeight = 50;
+    const binGap = 40;
+    const headerHeight = 30;
     
-    const drawWidth = canvas.width - (padding * 2);
-    const scale = drawWidth / totalStockLength;
+    const totalHeightNeeded = padding * 2 + bins.length * (binHeight + binGap);
+    
+    canvas.width = rect.width * dpr;
+    canvas.height = totalHeightNeeded * dpr;
+    ctx.scale(dpr, dpr);
+    
+    ctx.clearRect(0, 0, rect.width, totalHeightNeeded);
+
+    const drawableWidth = rect.width - (padding * 2);
+    const scale = drawableWidth / totalStockLength;
 
     bins.forEach((bin, bIdx) => {
-        const y = padding + (bIdx * (binHeight + binGap));
+        const y = padding + (bIdx * (binHeight + binGap)) + headerHeight;
         
-        // Draw Bin (Stock Material)
+        // Draw Bin Label
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'bold 12px Outfit, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`PROFIL #${bIdx + 1}`, padding, y - 10);
+        
+        // Draw Waste Info
+        ctx.textAlign = 'right';
+        ctx.fillStyle = bin.remaining > 50 ? '#94a3b8' : '#ef4444';
+        ctx.fillText(`Odpad: ${bin.remaining.toFixed(1)} mm`, padding + drawableWidth, y - 10);
+
+        // Draw Stock Material Background
         ctx.fillStyle = '#334155';
-        ctx.beginPath();
-        ctx.roundRect(padding, y, drawWidth, binHeight, 8);
+        drawRoundRect(ctx, padding, y, drawableWidth, binHeight, 8);
         ctx.fill();
         
-        // Label for Stock
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '12px Inter';
-        ctx.textAlign = 'left';
-        ctx.fillText(`Profil #${bIdx + 1}`, padding, y - 5);
-
         let currentX = padding;
         bin.items.forEach((itemLen, iIdx) => {
             const itemWidth = itemLen * scale;
             
             // Draw Item
-            ctx.fillStyle = '#3b82f6';
-            ctx.beginPath();
-            ctx.roundRect(currentX, y + 5, itemWidth, binHeight - 10, 4);
+            const gradient = ctx.createLinearGradient(currentX, y, currentX, y + binHeight);
+            gradient.addColorStop(0, '#38bdf8');
+            gradient.addColorStop(1, '#818cf8');
+            
+            ctx.fillStyle = gradient;
+            drawRoundRect(ctx, currentX, y + 4, itemWidth, binHeight - 8, 4);
             ctx.fill();
             
-            // Item Label
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 12px Inter';
+            // Item Text
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 11px Inter, sans-serif';
             ctx.textAlign = 'center';
             if (itemWidth > 30) {
                 ctx.fillText(`${itemLen}`, currentX + (itemWidth / 2), y + (binHeight / 2) + 4);
@@ -209,26 +250,51 @@ function drawVisualization(totalStockLength, bins, cutThickness) {
             // Draw Cut (Kerf)
             if (iIdx < bin.items.length - 1) {
                 const kerfWidth = Math.max(1, cutThickness * scale);
-                ctx.fillStyle = '#ef4444';
-                ctx.fillRect(currentX, y + 5, kerfWidth, binHeight - 10);
-                currentX += kerfWidth;
+                ctx.fillStyle = '#f472b6'; // Accent color for cut
+                ctx.fillRect(currentX, y + 4, kerfWidth, binHeight - 8);
+                currentX += (cutThickness * scale);
             }
         });
-
-        // Remaining text
-        if (bin.remaining > 0.1) {
-            ctx.fillStyle = '#94a3b8';
-            ctx.textAlign = 'right';
-            ctx.fillText(`Odpady: ${bin.remaining.toFixed(0)} mm`, padding + drawWidth, y + binHeight + 15);
-        }
     });
+}
+
+/**
+ * Utility to draw rounded rectangles.
+ */
+function drawRoundRect(ctx, x, y, width, height, radius) {
+    if (width < 2 * radius) radius = width / 2;
+    if (height < 2 * radius) radius = height / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + width, y, x + width, y + height, radius);
+    ctx.arcTo(x + width, y + height, x, y + height, radius);
+    ctx.arcTo(x, y + height, x, y, radius);
+    ctx.arcTo(x, y, x + width, y, radius);
+    ctx.closePath();
 }
 
 // Initial setup
 document.addEventListener('DOMContentLoaded', () => {
+    // Add event listener for Enter key on inputs
+    document.getElementById('newItemLength').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addItemToItems();
+    });
+    document.getElementById('newItemQuantity').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addItemToItems();
+    });
+
     updateItemListDOM();
     runOptimization();
 });
 
 // Handle window resize for canvas
-window.addEventListener('resize', runOptimization);
+let resizeTimer;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(runOptimization, 100);
+});
+
+// Global accessibility
+window.addItemToItems = addItemToItems;
+window.removeItemFromItems = removeItemFromItems;
+window.runOptimization = runOptimization;
