@@ -9,106 +9,205 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Fira+Code:wght@500&display=swap" rel="stylesheet">
 </head>
 <body>
 
-<main class="container">
-    <header>
-        <h1><span class="logo-icon">✂️</span> ScalTech <span class="accent">CutList</span></h1>
-        <p class="subtitle">Profesjonalna optymalizacja cięcia profili i materiałów</p>
-    </header>
-
-    <div class="app-grid">
-        <section id="inputSection" class="card input-section">
-            <div class="card-header">
-                <h2><span>1</span> Parametry Materiału</h2>
-            </div>
-            
-            <div class="material-inputs">
-                <div class="input-group">
-                    <label for="totalLength">Długość Profili (mm)</label>
-                    <input type="number" id="totalLength" value="6000" min="1" step="1" oninput="runOptimization()">
-                </div>
-                <div class="input-group">
-                    <label for="cutThickness">Grubość Rzazu (mm)</label>
-                    <input type="number" id="cutThickness" value="1.5" min="0" step="0.1" oninput="runOptimization()">
+<div class="app-wrapper">
+    <header class="main-header">
+        <div class="header-container">
+            <div class="brand">
+                <div class="logo-badge">✂️</div>
+                <div>
+                    <h1>ScalTech <span class="accent">CutList</span></h1>
+                    <p class="subtitle">Inteligentny optymalizator cięcia profili i materiałów</p>
                 </div>
             </div>
-
-            <div class="card-header secondary">
-                <h3>Dodaj Elementy do Cięcia</h3>
-            </div>
-            
-            <div class="add-item-form">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label for="newItemLength">Długość (mm)</label>
-                        <input type="number" id="newItemLength" placeholder="Np. 1200" min="1">
-                    </div>
-                    <div class="input-group">
-                        <label for="newItemQuantity">Ilość (szt.)</label>
-                        <input type="number" id="newItemQuantity" value="1" min="1">
-                    </div>
-                </div>
-                <button id="addBtn" class="btn-primary" onclick="addItemToItems()">
-                    <span class="btn-icon">+</span> Dodaj do Listy
+            <div class="header-actions no-print">
+                <button id="btnLoadSample" class="btn-secondary-sm" onclick="loadSampleData()" title="Wczytaj przykładowe elementy do cięcia">
+                    ⚡ Przykładowe Dane
+                </button>
+                <button id="btnClearAll" class="btn-secondary-sm" onclick="clearAllData()" title="Wyczyść wszystkie dane">
+                    🗑️ Wyczyść
+                </button>
+                <button id="btnPrintReport" class="btn-action-sm" onclick="window.print()" title="Drukuj lub zapisz raport jako PDF">
+                    🖨️ Drukuj / PDF
                 </button>
             </div>
+        </div>
+    </header>
 
-            <div id="itemListContainer" class="item-list-container">
-                <div id="itemList" class="item-list">
-                    <!-- Dynamic content -->
-                </div>
-            </div>
-        </section>
+    <main class="container">
+        <div class="app-grid">
+            <!-- SEKCJA WEJŚCIOWA (LEWA KOLUMNA) -->
+            <div class="input-column">
+                <!-- CARD 1: MATERIAŁ ŹRÓDŁOWY -->
+                <section id="inputSection" class="card input-section">
+                    <div class="card-header">
+                        <h2><span>1</span> Profile Źródłowe (Stock)</h2>
+                        <span class="badge">Dostępny materiał</span>
+                    </div>
 
-        <section id="outputSection" class="card output-section">
-            <div class="card-header">
-                <h2><span>2</span> Wyniki i Wizualizacja</h2>
-            </div>
-            
-            <div class="canvas-wrapper">
-                <canvas id="visualizationCanvas"></canvas>
+                    <div class="material-inputs">
+                        <label class="section-label">Dostępne długości profili:</label>
+                        <div id="sourceProfileList" class="profile-sources-grid">
+                            <!-- Dynamicznie generowane w JS -->
+                        </div>
+
+                        <div class="profile-presets no-print">
+                            <span class="preset-label">Szybki wybór:</span>
+                            <button class="btn-chip" onclick="addSourceProfileWithValues(6000, 10)">+ 6000 mm</button>
+                            <button class="btn-chip" onclick="addSourceProfileWithValues(3000, 10)">+ 3000 mm</button>
+                            <button class="btn-chip" onclick="addSourceProfileWithValues(2000, 10)">+ 2000 mm</button>
+                        </div>
+
+                        <button type="button" class="btn-add-source" onclick="addSourceProfile()">
+                            <span>+</span> Dodaj Inny Profil Źródłowy
+                        </button>
+
+                        <div class="material-settings-grid">
+                            <div class="input-group">
+                                <label for="cutThickness" title="Szerokość tarczy / rzaz w mm">Szerokość Cięcia (mm)</label>
+                                <input type="number" id="cutThickness" value="2" min="0" max="50" step="0.5" oninput="runOptimization()">
+                            </div>
+                            <div class="input-group">
+                                <label for="edgeTrim" title="Margines na wyrównanie brzegów profilu">Margines Brzegowy (mm)</label>
+                                <input type="number" id="edgeTrim" value="0" min="0" max="200" step="1" oninput="runOptimization()">
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CARD 2: LISTA ELEMENTÓW DO CIĘCIA -->
+                <section class="card item-section">
+                    <div class="card-header">
+                        <h2><span>2</span> Elementy do Cięcia</h2>
+                        <span id="totalItemsBadge" class="badge">0 szt.</span>
+                    </div>
+
+                    <form class="add-item-form" onsubmit="event.preventDefault(); addItemToItems();">
+                        <div class="input-row-three">
+                            <div class="input-group">
+                                <label for="newItemLength">Długość (mm)</label>
+                                <input type="number" id="newItemLength" placeholder="Np. 1200" min="1" step="1" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="newItemQuantity">Ilość (szt.)</label>
+                                <input type="number" id="newItemQuantity" value="1" min="1" step="1" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="newItemLabel">Etykieta (opcja)</label>
+                                <input type="text" id="newItemLabel" placeholder="Np. Rama A">
+                            </div>
+                        </div>
+                        <button type="submit" id="addBtn" class="btn-primary">
+                            <span class="btn-icon">+</span> Dodaj Element do Listy
+                        </button>
+                    </form>
+
+                    <div id="itemListContainer" class="item-list-container">
+                        <div id="itemList" class="item-list">
+                            <!-- Dynamic content -->
+                        </div>
+                    </div>
+                </section>
             </div>
 
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon">📏</div>
-                    <div class="stat-info">
-                        <span class="stat-label">Długość Stocku</span>
-                        <span class="stat-value"><span id="totalLengthDisplay">0</span> mm</span>
+            <!-- SEKCJA WYNIKÓW (PRAWA KOLUMNA) -->
+            <div class="output-column">
+                <section id="outputSection" class="card output-section">
+                    <div class="card-header space-between">
+                        <h2><span>3</span> Wyniki Optymalizacji</h2>
+                        <div class="algorithm-selector no-print">
+                            <label for="algoSelect">Algorytm:</label>
+                            <select id="algoSelect" onchange="runOptimization()">
+                                <option value="FFD">First Fit Decreasing (Najlepszy)</option>
+                                <option value="BFD">Best Fit Decreasing</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
-                <div class="stat-card waste">
-                    <div class="stat-icon">♻️</div>
-                    <div class="stat-info">
-                        <span class="stat-label">Całkowity Odpad</span>
-                        <span id="wasteResult" class="stat-value">0 mm</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">🔪</div>
-                    <div class="stat-info">
-                        <span class="stat-label">Liczba Cięć</span>
-                        <span id="cutCountResult" class="stat-value">0</span>
-                    </div>
-                </div>
-                <div class="stat-card accent">
-                    <div class="stat-icon">📦</div>
-                    <div class="stat-info">
-                        <span class="stat-label">Użyte Profile</span>
-                        <span id="blocksUsedResult" class="stat-value">0</span>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </div>
-</main>
 
-<footer class="main-footer">
-    <p>&copy; 2024 ScalTech Optimization Suite. Wszelkie prawa zastrzeżone.</p>
-</footer>
+                    <!-- Baner ostrzeżenia o braku materiału -->
+                    <div id="warningBanner" class="warning-banner hidden">
+                        <span class="warning-icon">⚠️</span>
+                        <div class="warning-content">
+                            <strong>Uwaga: Niewystarczająca ilość materiału!</strong>
+                            <p id="warningText">Część elementów nie zmieściła się w dostępnych profilach. Dodaj więcej profili źródłowych.</p>
+                        </div>
+                    </div>
+
+                    <!-- Kluczowe statystyki -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">📏</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Zużyty Materiał</span>
+                                <span class="stat-value"><span id="totalLengthDisplay">0</span> mm</span>
+                            </div>
+                        </div>
+                        <div class="stat-card efficiency">
+                            <div class="stat-icon">⚡</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Wydajność Cięcia</span>
+                                <span id="efficiencyResult" class="stat-value">0%</span>
+                            </div>
+                        </div>
+                        <div class="stat-card waste">
+                            <div class="stat-icon">♻️</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Całkowity Odpad</span>
+                                <span id="wasteResult" class="stat-value">0 mm</span>
+                            </div>
+                        </div>
+                        <div class="stat-card accent">
+                            <div class="stat-icon">📦</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Użyte Profile</span>
+                                <span id="blocksUsedResult" class="stat-value">0 szt.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Wizualizacja Canvas -->
+                    <div class="canvas-wrapper" id="canvasWrapper">
+                        <div class="canvas-header-info">
+                            <span>Wizualizacja Schematu Cięcia</span>
+                            <span class="canvas-hint no-print">💡 Kliknij element na schemacie, aby oznaczyć go jako wycięty (szary)</span>
+                        </div>
+                        <div class="canvas-container">
+                            <canvas id="visualizationCanvas"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Szczegółowa specyfikacja cięcia (Tabela i Rozpiska) -->
+                    <div class="cut-plan-details-section">
+                        <div class="details-header">
+                            <div>
+                                <h3>📋 Rozpiska Cięć Warsztatowych</h3>
+                                <span id="cutProgressBadge" class="badge-progress">Postęp: 0 / 0 szt. (0%)</span>
+                            </div>
+                            <div class="details-actions no-print">
+                                <button class="btn-secondary-sm" onclick="resetCutProgress()" title="Zresetuj oznaczanie wyciętych elementów">
+                                    🔄 Resetuj Postęp
+                                </button>
+                                <button class="btn-copy-plan btn-secondary-sm" onclick="copyCutPlanToClipboard()">
+                                    📋 Kopiuj Rozpiskę
+                                </button>
+                            </div>
+                        </div>
+                        <div id="cutPlanDetails" class="cut-plan-list">
+                            <!-- Rozpiska wygenerowana dynamicznie -->
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <footer class="main-footer">
+        <p>&copy; 2026 ScalTech Optimization Suite | Profesjonalny Optymalizator Cięcia Profili</p>
+    </footer>
+</div>
 
 <script src="app.js"></script>
 
