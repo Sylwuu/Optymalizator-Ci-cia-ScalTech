@@ -115,7 +115,7 @@ h1 .accent {
 
 .app-grid {
     display: grid;
-    grid-template-columns: 440px 1fr;
+    grid-template-columns: 440px minmax(0, 1fr);
     gap: 24px;
     align-items: start;
 }
@@ -124,6 +124,11 @@ h1 .accent {
     display: flex;
     flex-direction: column;
     gap: 24px;
+    min-width: 0;
+}
+
+.output-column {
+    width: 100%;
 }
 
 /* CARDS */
@@ -133,6 +138,7 @@ h1 .accent {
     padding: 24px;
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
+    min-width: 0;
 }
 
 .card-header {
@@ -174,6 +180,114 @@ h1 .accent {
     border-radius: 20px;
     font-size: 0.75rem;
     font-weight: 600;
+}
+
+.header-card-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-collapse-toggle {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.btn-collapse-toggle:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: rgba(56, 189, 248, 0.1);
+}
+
+/* INPUTS SUMMARY BAR (COLLAPSED WORKSHOP VIEW) */
+.inputs-summary-bar {
+    background: rgba(21, 29, 48, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-accent);
+    border-radius: 14px;
+    padding: 10px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.5);
+}
+
+.inputs-summary-bar:hover {
+    border-color: var(--primary);
+    background: rgba(27, 38, 62, 0.95);
+}
+
+.inputs-summary-bar.hidden {
+    display: none !important;
+}
+
+.input-column.collapsed {
+    display: none !important;
+}
+
+/* Kiedy formularze są zwinięte, rozszerz sekcję wyników na 100% szerokości w każdym trybie (w tym 16:9 poziomo) */
+.app-grid.inputs-collapsed,
+.app-grid:has(.input-column.collapsed) {
+    grid-template-columns: 1fr !important;
+}
+
+.app-grid.inputs-collapsed .output-column,
+.app-grid:has(.input-column.collapsed) .output-column {
+    width: 100% !important;
+}
+
+/* TRYB PEŁNOEKRANOWY / KIOSK WARSZTATOWY */
+body.fullscreen-mode {
+    overflow-x: hidden;
+}
+
+body.fullscreen-mode .main-header {
+    padding: 10px 0;
+    background: rgba(15, 23, 42, 0.95);
+}
+
+body.fullscreen-mode .container {
+    max-width: 100% !important;
+    padding: 14px 24px !important;
+}
+
+body.fullscreen-mode #btnToggleFullscreen {
+    background: var(--primary) !important;
+    color: #0b0f19 !important;
+    font-weight: 800;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+    border-color: var(--primary);
+}
+
+.summary-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--text-main);
+}
+
+.summary-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.summary-item strong {
+    color: var(--primary);
+    font-family: var(--font-heading);
 }
 
 .badge-progress {
@@ -452,6 +566,10 @@ h1 .accent {
     font-size: 0.8rem;
     color: var(--secondary);
     font-weight: 500;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .item-controls {
@@ -595,6 +713,9 @@ h1 .accent {
     padding: 16px;
     border: 1px solid var(--border);
     margin-bottom: 24px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .canvas-header-info {
@@ -614,11 +735,14 @@ h1 .accent {
 
 .canvas-container {
     width: 100%;
-    overflow-x: auto;
+    overflow-x: hidden;
+    min-width: 0;
+    position: relative;
 }
 
 #visualizationCanvas {
-    width: 100%;
+    width: 100% !important;
+    max-width: 100%;
     display: block;
     cursor: pointer;
 }
@@ -780,29 +904,275 @@ h1 .accent {
     }
 }
 
-/* RESPONSIVE DESIGN */
-@media (max-width: 1100px) {
+/* RESPONSIVE DESIGN - OPTIMIZED FOR VERTICAL 16:9 & WORKSHOP MONITORS */
+
+/* 1. Ekran 16:9 ustawiony pionowo (np. 1080x1920, 1440x2560, monitory obrócone w pivot) */
+@media (orientation: portrait) and (min-width: 681px), 
+       (max-aspect-ratio: 1/1) and (min-width: 681px),
+       (max-width: 1180px) and (min-width: 681px) {
+    .container {
+        padding: 16px 20px;
+        max-width: 1300px;
+    }
+
+    /* Układ sekcji: formularze wejściowe na górze (obok siebie), wyniki na pełną szerokość pod nimi */
     .app-grid {
         grid-template-columns: 1fr;
+        gap: 20px;
     }
-    
+
+    .input-column {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: stretch;
+    }
+
+    .card {
+        padding: 20px;
+        border-radius: 16px;
+    }
+
+    .card-header {
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+    }
+
+    /* Statystyki w 1 czytelnym rzędzie 4 kolumn (oszczędność miejsca w pionie) */
     .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .stat-card {
+        padding: 12px 14px;
+        border-radius: 12px;
+        gap: 10px;
+    }
+
+    .stat-icon {
+        width: 38px;
+        height: 38px;
+        font-size: 1.2rem;
+    }
+
+    .stat-label {
+        font-size: 0.68rem;
+    }
+
+    .stat-value {
+        font-size: 1.1rem;
+    }
+
+    /* Formularze wejściowe kompaktowe i symetryczne */
+    .profile-sources-grid {
+        max-height: 160px;
+        overflow-y: auto;
+        padding-right: 4px;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .source-profile-group {
+        padding: 10px;
+        gap: 8px;
+    }
+
+    .material-settings-grid {
+        gap: 10px;
+        padding-top: 10px;
+    }
+
+    .btn-add-source {
+        padding: 8px 10px;
+        margin-bottom: 12px;
+        font-size: 0.8rem;
+    }
+
+    .input-row-three {
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .btn-primary {
+        padding: 10px 14px;
+        font-size: 0.9rem;
+    }
+
+    .item-list-container {
+        max-height: 200px;
+        min-height: 120px;
+        margin-top: 12px;
+    }
+
+    .item-badge-card {
+        padding: 8px 12px;
+    }
+
+    .canvas-wrapper {
+        padding: 14px;
+        margin-bottom: 20px;
+        border-radius: 14px;
+    }
+
+    .cut-plan-details-section {
+        padding: 14px;
+        border-radius: 14px;
     }
 }
 
-@media (max-width: 640px) {
-    .header-container {
-        flex-direction: column;
-        gap: 12px;
-        align-items: flex-start;
+/* 2. Ekrany o średniej szerokości pionowej (681px - 850px) - drobne korekty */
+@media (max-width: 850px) and (min-width: 681px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .input-row-three {
         grid-template-columns: 1fr 1fr;
     }
 
+    .input-row-three .input-group:last-child {
+        grid-column: span 2;
+    }
+}
+
+/* 3. Ekrany mobilne i wąskie (<= 680px) */
+@media (max-width: 680px) {
+    .container {
+        padding: 12px 14px;
+    }
+
+    .header-container {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+    }
+
+    .header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    .app-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .input-column {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .input-row-three {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .input-row-three .input-group:last-child {
+        grid-column: span 2;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+}
+
+@media (max-width: 480px) {
     .stats-grid {
         grid-template-columns: 1fr;
     }
+
+    .details-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+}
+
+/* DRAG & DROP OVERLAY (IMPORT PLIKÓW DLA WARSZTATU) */
+.drag-drop-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(11, 15, 25, 0.9);
+    backdrop-filter: blur(8px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.drag-drop-overlay.hidden {
+    display: none !important;
+}
+
+.drag-drop-box {
+    background: rgba(21, 29, 48, 0.95);
+    border: 2px dashed var(--primary);
+    border-radius: 24px;
+    padding: 40px 60px;
+    text-align: center;
+    box-shadow: 0 0 50px rgba(56, 189, 248, 0.35);
+    animation: pulseDrop 2s infinite ease-in-out;
+}
+
+@keyframes pulseDrop {
+    0%, 100% { border-color: var(--primary); transform: scale(1); }
+    50% { border-color: var(--secondary); transform: scale(1.02); }
+}
+
+.drop-icon {
+    font-size: 3.5rem;
+    margin-bottom: 12px;
+}
+
+.drag-drop-box h3 {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    color: var(--text-main);
+    margin-bottom: 8px;
+}
+
+.drag-drop-box p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+.drag-drop-box strong {
+    color: var(--primary);
+}
+
+/* TOAST NOTIFICATION */
+.toast-notification {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(15, 23, 42, 0.96);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--primary);
+    color: var(--text-main);
+    padding: 14px 20px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(56, 189, 248, 0.3);
+    z-index: 10000;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+    pointer-events: none;
+    max-width: 480px;
+    line-height: 1.4;
+}
+
+.toast-notification.show {
+    transform: translateY(0);
+    opacity: 1;
 }

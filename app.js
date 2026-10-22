@@ -34,6 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Attach canvas click and mousemove listeners for interactive cut toggling
     initCanvasInteractions();
 
+    // Enable drag and drop file import for workshop machinist
+    initDragAndDrop();
+
     // Auto-load sample data on first visit
     loadSampleData();
 
@@ -43,6 +46,21 @@ document.addEventListener('DOMContentLoaded', () => {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(runOptimization, 100);
     });
+
+    // ResizeObserver on output column to immediately adapt when leaving/entering fullscreen or window resize
+    if (window.ResizeObserver) {
+        const outputCol = document.querySelector('.output-column');
+        if (outputCol) {
+            let roTimer;
+            const ro = new ResizeObserver(() => {
+                clearTimeout(roTimer);
+                roTimer = setTimeout(() => {
+                    runOptimization();
+                }, 30);
+            });
+            ro.observe(outputCol);
+        }
+    }
 });
 
 // --- Canvas Interactions (Click & Hover) ---
@@ -279,6 +297,10 @@ function clearAllData() {
         itemsToCut = [];
         availableSources = [{ id: 1, length: 6000, count: 5 }];
         completedCutIds.clear();
+        const ct = document.getElementById('cutThickness');
+        if (ct) ct.value = "1.5";
+        const et = document.getElementById('edgeTrim');
+        if (et) et.value = "0";
         renderSourceProfilesDOM();
         updateItemListDOM();
         runOptimization();
@@ -429,6 +451,7 @@ function runOptimization() {
     updateStats(totalStockLengthUsed, efficiency, totalWaste, totalCutsCount, openBins.length);
     drawVisualization(openBins, cutThickness, edgeTrim);
     renderWorkshopCutPlan(openBins, cutThickness, edgeTrim);
+    updateInputsSummaryDOM();
 }
 
 // --- Stats & UI Updates ---
@@ -482,26 +505,30 @@ function drawVisualization(bins, cutThickness, edgeTrim) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    const dpr = window.devicePixelRatio || 1;
-    const container = document.getElementById('canvasWrapper');
-    const rect = container.getBoundingClientRect();
+    // Reset canvas style width to 100% so it never forces parent container to stay stretched
+    canvas.style.width = '100%';
 
-    const paddingX = 20;
-    const paddingY = 20;
+    const dpr = window.devicePixelRatio || 1;
+    const container = canvas.parentElement || document.getElementById('canvasWrapper');
+    const containerWidth = container ? container.clientWidth : 0;
+    const canvasWidth = Math.max(containerWidth, 280);
+
+    const paddingX = Math.min(20, Math.max(10, Math.floor(canvasWidth * 0.025)));
+    const paddingY = 18;
     const binHeight = 44;
-    const binGap = 36;
+    const binGap = 34;
     const labelHeight = 20;
 
     const totalHeight = paddingY * 2 + bins.length * (binHeight + binGap + labelHeight);
 
-    canvas.width = (rect.width - 34) * dpr;
+    canvas.width = canvasWidth * dpr;
     canvas.height = totalHeight * dpr;
+    canvas.style.width = '100%';
     canvas.style.height = `${totalHeight}px`;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
 
-    const canvasWidth = rect.width - 34;
     ctx.clearRect(0, 0, canvasWidth, totalHeight);
 
     canvasBoundingBoxes = []; // Reset hit boxes
@@ -705,3 +732,414 @@ function escapeHtml(text) {
     const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
     return text.replace(/[&<>"']/g, m => map[m]);
 }
+
+// --- Inputs Collapse & Fullscreen Controls (Optimized for Vertical 16:9 / Workshop Screens) ---
+let isInputsCollapsed = false;
+
+function toggleInputsCollapse() {
+    isInputsCollapsed = !isInputsCollapsed;
+    const appGrid = document.querySelector('.app-grid');
+    const inputCol = document.querySelector('.input-column');
+    const summaryBar = document.getElementById('inputsSummaryBar');
+    if (!inputCol || !summaryBar) return;
+
+    if (isInputsCollapsed) {
+        updateInputsSummaryDOM();
+        inputCol.classList.add('collapsed');
+        if (appGrid) appGrid.classList.add('inputs-collapsed');
+        summaryBar.classList.remove('hidden');
+    } else {
+        inputCol.classList.remove('collapsed');
+        if (appGrid) appGrid.classList.remove('inputs-collapsed');
+        summaryBar.classList.add('hidden');
+    }
+
+    // Trigger canvas redraw to adapt to the new layout/width
+    setTimeout(() => {
+        runOptimization();
+    }, 60);
+}
+
+function updateInputsSummaryDOM() {
+    const summaryInfo = document.getElementById('inputsSummaryInfo');
+    if (!summaryInfo) return;
+
+    const totalSources = availableSources.reduce((sum, s) => sum + s.count, 0);
+    const totalItems = itemsToCut.reduce((sum, i) => sum + i.quantity, 0);
+    const cutThickness = document.getElementById('cutThickness')?.value || 1.5;
+    const edgeTrim = document.getElementById('edgeTrim')?.value || 0;
+
+    const sourcesDesc = availableSources.map(s => `${s.length} mm (${s.count} szt.)`).join(', ');
+
+    summaryInfo.innerHTML = `
+        <div class="summary-item">
+            <span>📦 Profile:</span>
+            <strong>${sourcesDesc || `${totalSources} szt.`}</strong>
+        </div>
+        <div class="summary-item">
+            <span>✂️ Elementy:</span>
+            <strong>${totalItems} szt. (${itemsToCut.length} pozycji)</strong>
+        </div>
+        <div class="summary-item">
+            <span>📏 Rzaz:</span>
+            <strong>${cutThickness} mm</strong>
+        </div>
+        ${edgeTrim > 0 ? `
+        <div class="summary-item">
+            <span>Margines:</span>
+            <strong>${edgeTrim} mm</strong>
+        </div>
+        ` : ''}
+    `;
+}
+
+let isAppFullscreen = false;
+
+function toggleFullscreen() {
+    isAppFullscreen = !isAppFullscreen;
+    const body = document.body;
+    const btn = document.getElementById('btnToggleFullscreen');
+
+    if (isAppFullscreen) {
+        body.classList.add('fullscreen-mode');
+        if (btn) btn.innerHTML = '🗗 Opuść Pełny Ekran';
+
+        // Try standard or prefixed browser fullscreen
+        const docEl = document.documentElement;
+        const requestMethod = docEl.requestFullscreen || 
+                              docEl.webkitRequestFullscreen || 
+                              docEl.mozRequestFullScreen || 
+                              docEl.msRequestFullscreen;
+        if (requestMethod && !document.fullscreenElement && !document.webkitFullscreenElement) {
+            try {
+                const res = requestMethod.call(docEl);
+                if (res && res.catch) res.catch(() => {});
+            } catch (err) {
+                console.log("Browser fullscreen blocked; active in-app fullscreen mode instead", err);
+            }
+        }
+    } else {
+        body.classList.remove('fullscreen-mode');
+        if (btn) btn.innerHTML = '⛶ Pełny Ekran';
+
+        const exitMethod = document.exitFullscreen || 
+                           document.webkitExitFullscreen || 
+                           document.mozCancelFullScreen || 
+                           document.msExitFullscreen;
+        if (exitMethod && (document.fullscreenElement || document.webkitFullscreenElement)) {
+            try {
+                const res = exitMethod.call(document);
+                if (res && res.catch) res.catch(() => {});
+            } catch (err) {}
+        }
+    }
+
+    // Trigger canvas redraw with updated dimensions across transition
+    runOptimization();
+    setTimeout(runOptimization, 50);
+    setTimeout(runOptimization, 200);
+}
+
+// Keep button text in sync if user exits native fullscreen via Esc key or F11
+['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(ev => {
+    document.addEventListener(ev, () => {
+        const isNative = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        if (!isNative && isAppFullscreen) {
+            isAppFullscreen = false;
+            document.body.classList.remove('fullscreen-mode');
+            const btn = document.getElementById('btnToggleFullscreen');
+            if (btn) btn.innerHTML = '⛶ Pełny Ekran';
+            runOptimization();
+            setTimeout(runOptimization, 50);
+            setTimeout(runOptimization, 200);
+        }
+    });
+});
+
+// --- File Transfer & Project Export/Import (Office to Workshop / Biuro do Warsztatu) ---
+
+function getProjectDataJSON() {
+    const cutThickness = parseFloat(document.getElementById('cutThickness')?.value) || 1.5;
+    const edgeTrim = parseFloat(document.getElementById('edgeTrim')?.value) || 0;
+    const algorithm = document.getElementById('algoSelect')?.value || "FFD";
+
+    const projectData = {
+        app: "ScalTech CutList",
+        version: "1.2",
+        exportedAt: new Date().toISOString(),
+        settings: {
+            cutThickness: cutThickness,
+            edgeTrim: edgeTrim,
+            algorithm: algorithm
+        },
+        availableSources: availableSources,
+        itemsToCut: itemsToCut,
+        completedCutIds: Array.from(completedCutIds)
+    };
+    return JSON.stringify(projectData, null, 2);
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
+}
+
+// 1. Zapis projektu do pliku .cutlist (do przesłania maszyniście)
+function exportProjectFile() {
+    if (itemsToCut.length === 0) {
+        alert("Lista elementów do cięcia jest pusta. Dodaj elementy przed eksportem.");
+        return;
+    }
+    const projectJson = getProjectDataJSON();
+    const blob = new Blob([projectJson], { type: 'application/json' });
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    const filename = `Rozpiska_ScalTech_${dateStr}_${timeStr}.cutlist`;
+    downloadBlob(blob, filename);
+    showNotification(`💾 Zapisano plik projektu: ${filename}. Możesz przesłać go maszyniście.`);
+}
+
+// 2. Eksport do obrazu PNG ze schematem cięcia i zaszytymi danymi projektu
+function exportVisualizerPNG() {
+    const canvas = document.getElementById('visualizationCanvas');
+    if (!canvas || itemsToCut.length === 0) {
+        alert("Lista elementów do cięcia jest pusta. Dodaj elementy przed eksportem grafiki.");
+        return;
+    }
+
+    const exportCanvas = document.createElement('canvas');
+    const expCtx = exportCanvas.getContext('2d');
+    const dpr = 2; // wysoka rozdzielczość
+
+    const bannerHeight = 110;
+    const padding = 20;
+    const canvasCssW = canvas.width / (window.devicePixelRatio || 1);
+    const canvasCssH = canvas.height / (window.devicePixelRatio || 1);
+    const totalW = Math.max(canvasCssW + (padding * 2), 940);
+    const totalH = canvasCssH + bannerHeight + (padding * 2);
+
+    exportCanvas.width = totalW * dpr;
+    exportCanvas.height = totalH * dpr;
+    expCtx.scale(dpr, dpr);
+
+    // Tło główne
+    expCtx.fillStyle = '#0b0f19';
+    expCtx.fillRect(0, 0, totalW, totalH);
+
+    // Karta nagłówkowa
+    expCtx.fillStyle = '#151d30';
+    drawRoundRect(expCtx, padding, padding, totalW - (padding * 2), bannerHeight, 14);
+    expCtx.fill();
+    expCtx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
+    expCtx.lineWidth = 1;
+    expCtx.stroke();
+
+    // Tytuł
+    expCtx.fillStyle = '#38bdf8';
+    expCtx.font = 'bold 20px Outfit, sans-serif';
+    expCtx.fillText('✂️ ScalTech CutList — Raport Rozkroju Materiału', padding + 18, padding + 34);
+
+    // Metadane
+    const now = new Date();
+    const dateStr = now.toLocaleString('pl-PL');
+    const ct = document.getElementById('cutThickness')?.value || 1.5;
+    const et = document.getElementById('edgeTrim')?.value || 0;
+    expCtx.fillStyle = '#94a3b8';
+    expCtx.font = '500 12px Inter, sans-serif';
+    expCtx.fillText(`Data: ${dateStr}   |   Rzaz piły: ${ct} mm   |   Margines brzegowy: ${et} mm`, padding + 18, padding + 56);
+
+    // Statystyki
+    const stockUsed = document.getElementById('totalLengthDisplay')?.textContent || '0';
+    const eff = document.getElementById('efficiencyResult')?.textContent || '0%';
+    const waste = document.getElementById('wasteResult')?.textContent || '0 mm';
+    const blocks = document.getElementById('blocksUsedResult')?.textContent || '0 szt.';
+
+    expCtx.fillStyle = '#f8fafc';
+    expCtx.font = 'bold 13px Inter, sans-serif';
+    expCtx.fillText(`Zużyty materiał: ${stockUsed} mm   •   Wydajność: ${eff}   •   Odpad: ${waste}   •   Użyte profile: ${blocks}`, padding + 18, padding + 84);
+
+    // Narysuj schemat cięcia z canvasu
+    expCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height, padding, bannerHeight + padding + 10, totalW - (padding * 2), canvasCssH);
+
+    // Konwertuj do PNG i dołącz metadane JSON projektu po znaczniku IEND
+    exportCanvas.toBlob((blob) => {
+        if (!blob) return;
+        const projectJson = getProjectDataJSON();
+        const metadataString = `\n/*SCALTECH_PROJECT:${projectJson}*/\n`;
+        const metadataBlob = new Blob([metadataString], { type: 'text/plain' });
+        const finalBlob = new Blob([blob, metadataBlob], { type: 'image/png' });
+
+        const dateFormatted = now.toISOString().slice(0, 10);
+        const timeFormatted = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+        const filename = `Rozpiska_ScalTech_${dateFormatted}_${timeFormatted}.png`;
+        downloadBlob(finalBlob, filename);
+        showNotification(`🖼️ Zapisano obraz PNG: ${filename} (możesz otworzyć go jako grafikę lub załadować w programie).`);
+    }, 'image/png');
+}
+
+// 3. Wczytywanie pliku przez maszynistę (Wybór pliku)
+function triggerImportFile() {
+    const input = document.getElementById('importFileInput');
+    if (input) {
+        input.value = '';
+        input.click();
+    }
+}
+
+function handleFileImport(e) {
+    const file = e.target.files?.[0];
+    if (file) {
+        processUploadedFile(file);
+    }
+}
+
+// 4. Przetwarzanie wgrywanego pliku (.cutlist, .json, .png)
+function processUploadedFile(file) {
+    const reader = new FileReader();
+
+    if (file.name.toLowerCase().endsWith('.png') || file.type === 'image/png') {
+        reader.onload = (event) => {
+            const content = event.target.result;
+            const marker = '/*SCALTECH_PROJECT:';
+            const startIdx = content.indexOf(marker);
+            if (startIdx !== -1) {
+                const endIdx = content.indexOf('*/', startIdx + marker.length);
+                if (endIdx !== -1) {
+                    const jsonStr = content.substring(startIdx + marker.length, endIdx);
+                    loadProjectFromJSON(jsonStr, file.name);
+                    return;
+                }
+            }
+            alert("⚠️ Wskazany plik PNG nie zawiera zapisanych danych projektu ScalTech. Wczytaj plik .cutlist, .json lub PNG wyeksportowany przez aplikację ScalTech CutList.");
+        };
+        if (reader.readAsBinaryString) {
+            reader.readAsBinaryString(file);
+        } else {
+            reader.readAsText(file);
+        }
+    } else {
+        reader.onload = (event) => {
+            const jsonStr = event.target.result;
+            loadProjectFromJSON(jsonStr, file.name);
+        };
+        reader.readAsText(file);
+    }
+}
+
+// 5. Odtworzenie stanu aplikacji z JSON
+function loadProjectFromJSON(jsonStr, filename) {
+    try {
+        const data = JSON.parse(jsonStr);
+
+        if (!data || (!data.itemsToCut && !data.availableSources)) {
+            throw new Error("Plik nie zawiera poprawnych danych projektu ScalTech CutList.");
+        }
+
+        if (Array.isArray(data.availableSources) && data.availableSources.length > 0) {
+            availableSources = data.availableSources;
+            renderSourceProfilesDOM();
+        }
+
+        if (Array.isArray(data.itemsToCut)) {
+            itemsToCut = data.itemsToCut;
+            updateItemListDOM();
+        }
+
+        if (data.settings) {
+            if (data.settings.cutThickness !== undefined) {
+                const ct = document.getElementById('cutThickness');
+                if (ct) ct.value = data.settings.cutThickness;
+            }
+            if (data.settings.edgeTrim !== undefined) {
+                const et = document.getElementById('edgeTrim');
+                if (et) et.value = data.settings.edgeTrim;
+            }
+            if (data.settings.algorithm) {
+                const algo = document.getElementById('algoSelect');
+                if (algo) algo.value = data.settings.algorithm;
+            }
+        }
+
+        if (Array.isArray(data.completedCutIds)) {
+            completedCutIds = new Set(data.completedCutIds);
+        } else {
+            completedCutIds.clear();
+        }
+
+        runOptimization();
+
+        const totalItems = itemsToCut.reduce((sum, i) => sum + i.quantity, 0);
+        showNotification(`✅ Załadowano rozpiskę z pliku "${filename}" (${totalItems} szt. elementów, ${availableSources.length} profili)`);
+    } catch (err) {
+        console.error("Błąd ładowania pliku:", err);
+        alert(`❌ Błąd odczytu pliku: ${err.message || 'Nieprawidłowa struktura pliku'}`);
+    }
+}
+
+// 6. Obsługa Drag & Drop na całym oknie dla wygody maszynisty
+function initDragAndDrop() {
+    const dropOverlay = document.getElementById('dragDropOverlay');
+    let dragCounter = 0;
+
+    window.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter++;
+        if (dropOverlay) dropOverlay.classList.remove('hidden');
+    });
+
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+
+    window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter--;
+        if (dragCounter <= 0 && dropOverlay) {
+            dragCounter = 0;
+            dropOverlay.classList.add('hidden');
+        }
+    });
+
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter = 0;
+        if (dropOverlay) dropOverlay.classList.add('hidden');
+
+        const file = e.dataTransfer?.files?.[0];
+        if (file) {
+            processUploadedFile(file);
+        }
+    });
+}
+
+// 7. Komunikaty Toast
+function showNotification(msg) {
+    let toast = document.getElementById('toastNotification');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toastNotification';
+        toast.className = 'toast-notification';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 4500);
+}
+
+

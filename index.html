@@ -24,28 +24,63 @@
                 </div>
             </div>
             <div class="header-actions no-print">
+                <button id="btnSaveProject" class="btn-secondary-sm" onclick="exportProjectFile()" title="Zapisz projekt do pliku (.cutlist) i wyślij maszyniście">
+                    💾 Zapisz Plik
+                </button>
+                <button id="btnLoadProject" class="btn-secondary-sm" onclick="triggerImportFile()" title="Wczytaj plik rozpiski (.cutlist, .json, .png)">
+                    📂 Wczytaj Plik
+                </button>
+                <button id="btnExportPNG" class="btn-secondary-sm" onclick="exportVisualizerPNG()" title="Pobierz schemat cięcia jako obraz PNG">
+                    🖼️ Zapisz PNG
+                </button>
                 <button id="btnLoadSample" class="btn-secondary-sm" onclick="loadSampleData()" title="Wczytaj przykładowe elementy do cięcia">
-                    ⚡ Przykładowe Dane
+                    ⚡ Dane
                 </button>
                 <button id="btnClearAll" class="btn-secondary-sm" onclick="clearAllData()" title="Wyczyść wszystkie dane">
                     🗑️ Wyczyść
                 </button>
-                <button id="btnPrintReport" class="btn-action-sm" onclick="window.print()" title="Drukuj lub zapisz raport jako PDF">
-                    🖨️ Drukuj / PDF
+                <button id="btnToggleFullscreen" class="btn-secondary-sm" onclick="toggleFullscreen()" title="Przełącz tryb pełnoekranowy (F11)">
+                    ⛶ Pełny Ekran
                 </button>
+                <button id="btnPrintReport" class="btn-action-sm" onclick="window.print()" title="Drukuj lub zapisz raport jako PDF">
+                    🖨️ PDF
+                </button>
+                <input type="file" id="importFileInput" accept=".cutlist,.json,.png,image/png,application/json,text/plain" style="display:none" onchange="handleFileImport(event)">
             </div>
         </div>
     </header>
 
+    <!-- Nakładka Drag & Drop do szybkiego przeciągania plików przez maszynistę -->
+    <div id="dragDropOverlay" class="drag-drop-overlay hidden no-print">
+        <div class="drag-drop-box">
+            <div class="drop-icon">📥</div>
+            <h3>Upuść plik rozpiski tutaj</h3>
+            <p>Obsługiwane formaty: <strong>.cutlist</strong>, <strong>.json</strong>, <strong>.png</strong></p>
+        </div>
+    </div>
+
     <main class="container">
+        <!-- Pasek podsumowania po zwinięciu formularzy (widok warsztatowy) -->
+        <div id="inputsSummaryBar" class="inputs-summary-bar hidden no-print" onclick="toggleInputsCollapse()" title="Kliknij, aby rozwinąć parametry cięcia">
+            <div class="summary-info" id="inputsSummaryInfo">
+                <!-- Generowane dynamicznie w JS -->
+            </div>
+            <button type="button" class="btn-secondary-sm" onclick="event.stopPropagation(); toggleInputsCollapse();">
+                ⚙️ Rozwiń Parametry ▾
+            </button>
+        </div>
+
         <div class="app-grid">
-            <!-- SEKCJA WEJŚCIOWA (LEWA KOLUMNA) -->
+            <!-- SEKCJA WEJŚCIOWA (LEWA KOLUMNA W POZIOMIE / GÓRNY RZĄD W PIONIE) -->
             <div class="input-column">
                 <!-- CARD 1: MATERIAŁ ŹRÓDŁOWY -->
                 <section id="inputSection" class="card input-section">
                     <div class="card-header">
                         <h2><span>1</span> Profile Źródłowe (Stock)</h2>
-                        <span class="badge">Dostępny materiał</span>
+                        <div class="header-card-controls">
+                            <span class="badge">Dostępny materiał</span>
+                            <button id="btnCollapseInputs" type="button" class="btn-collapse-toggle no-print" onclick="toggleInputsCollapse()" title="Zwiń formularze wejściowe, aby powiększyć podgląd cięcia">▲ Zwiń Formularze</button>
+                        </div>
                     </div>
 
                     <div class="material-inputs">
@@ -68,7 +103,7 @@
                         <div class="material-settings-grid">
                             <div class="input-group">
                                 <label for="cutThickness" title="Szerokość tarczy / rzaz w mm">Szerokość Cięcia (mm)</label>
-                                <input type="number" id="cutThickness" value="2" min="0" max="50" step="0.5" oninput="runOptimization()">
+                                <input type="number" id="cutThickness" value="1.5" min="0" max="50" step="0.5" oninput="runOptimization()">
                             </div>
                             <div class="input-group">
                                 <label for="edgeTrim" title="Margines na wyrównanie brzegów profilu">Margines Brzegowy (mm)</label>
